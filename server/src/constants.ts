@@ -1,2 +1,2 @@
-export const FRAME_RATE = 10;
+export const FRAME_RATE = 5;
 export const GRID_SIZE = 20;
