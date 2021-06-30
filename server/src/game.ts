@@ -1,14 +1,19 @@
-import { GRID_SIZE } from "./constants";
+import { Server, Socket } from "socket.io";
+import { FRAME_RATE, GRID_SIZE } from "./constants";
+export interface Player {
+	// id: string;
+	name: string;
+	pos: Position;
+	vel: {
+		x: number;
+		y: number;
+	},
+	snake: Position[];
+	// socket: Socket;
+	color: string;
+}
 export interface GameState {
-	active: boolean;
-    players: {
-        pos: Position;
-        vel: {
-            x: number;
-            y: number;
-        },
-        snake: Position[];
-    }[],
+    players: {[Key: string]: Player};
     food: Position;
     gridsize: number;
 }
@@ -16,141 +21,153 @@ export interface Position {
     x: number;
     y: number;
 }
-export function initGame (): GameState {
-	const state = createGameState();
-	randomFood(state);
-	return state;
-}
-export function createGameState (): GameState {
-	return {
-		active: false,
-		players: [{
-			pos: {
-				x: 3,
-				y: 10
-			},
-			vel: {
-				x: 1,
-				y: 0
-			},
-			snake: [{
-				x: 1,
-				y: 10
-			}, {
-				x: 2,
-				y: 10
-			}, {
-				x: 3,
-				y: 10
-			}],
-		},{
-			pos: {
+
+export class Game {
+	state: GameState;
+	io: Server;
+	clients: {[key: string]: Socket};
+	constructor(io: Server) {
+		this.state = {
+			players: {},
+			food: {
 				x: 7,
 				y: 7
 			},
-			vel: {
-				x: 1,
-				y: 0
-			},
-			snake: [{
-				x: 5,
-				y: 7
-			}, {
-				x: 6,
-				y: 7
-			}, {
-				x: 7,
-				y: 7
-			}],
-		}],
-		food: {
-			x: 7,
-			y: 7
-		},
-		gridsize: GRID_SIZE
-	};
-}
-
-export function GameLoop (state: GameState):number {
-	if(!state) {
-		return 0;
+			gridsize: GRID_SIZE
+		};
+		this.io = io;
+		this.clients = {};
+		io.on("connection", this.handleOnConnect);
 	}
-	const playerOne = state.players[0];
-	const playerTwo = state.players[1];
-	playerOne.pos.x +=playerOne.vel.x;
-	playerOne.pos.y +=playerOne.vel.y;
-
-	playerTwo.pos.x +=playerTwo.vel.x;
-	playerTwo.pos.y +=playerTwo.vel.y;
-
-	if(playerOne.pos.x<0 || playerOne.pos.x>GRID_SIZE || playerOne.pos.y<0 || playerOne.pos.y>GRID_SIZE) {
-		return 2;
-	}
-	if(playerTwo.pos.x<0 || playerTwo.pos.x>GRID_SIZE || playerTwo.pos.y<0 || playerTwo.pos.y>GRID_SIZE) {
-		return 1;
-	}
-	if(state.food.x===playerOne.pos.x && state.food.y===playerOne.pos.y) {
-		playerOne.snake.push({...playerOne.pos});
-		playerOne.pos.x +=playerOne.vel.x;
-		playerOne.pos.y +=playerOne.vel.y;
-		randomFood(state);
-	}
-	if(state.food.x===playerTwo.pos.x && state.food.y===playerTwo.pos.y) {
-		playerTwo.snake.push({...playerTwo.pos});
-		playerTwo.pos.x +=playerTwo.vel.x;
-		playerTwo.pos.y +=playerTwo.vel.y;
-		randomFood(state);
-	}
-	//check player1 touch player2
-	for(const cell of playerTwo.snake) {
-		if(playerOne.pos.x == cell.x && playerOne.pos.y == cell.y) {
-			return 2;
-		}
-	}
-	for(const cell of playerOne.snake) {
-		if(playerTwo.pos.x == cell.x && playerTwo.pos.y == cell.y) {
-			return 1;
-		}
+	handleOnConnect = (client: Socket) => {
+		// this.addPlayer(client);
+		client.on("joinGame", (playerName)=>{
+			this.addPlayer(client, playerName);
+		});
+		client.on("disconnection",()=>{
+			console.log(`${client.id} disconnect`);
+			this.removePlayer(client);
+		});
+		client.on("turn", (direction: "Right" | "Left" | "Down" | "Up") => {
+			this.handlePlayerInput(client, direction);
+		});
 	}
 	
-	if (playerOne.vel.x || playerOne.vel.y) {
-		for(const cell of playerOne.snake) {
-			if(cell.x === playerOne.pos.x && cell.y === playerOne.pos.y) {
-				return 2;
+	startGameInterval () {
+		console.log("startGameInterval");
+		const intervalId = setInterval(() => {
+			this.GameLoop();
+			// console.log(this.io.sockets);
+			this.io.emit("gameState", this.state);
+			// this.io.emit("gameState", this.state);
+		}, 1000 / FRAME_RATE);
+	}
+	handlePlayerInput = (client: Socket, direction: "Right" | "Left" | "Down" | "Up") => {
+		console.log(`${client.id} turn ${direction}`);
+		// const clientNumber = (client as any).number;
+		const player = this.state.players[client.id];
+		if(!player) return; //player dead
+		switch(direction) {
+		case "Right":
+			if(player.vel.y != 0) {
+				player.vel = { x: 1, y: 0 };
+			}
+			break; 
+		case "Left":
+			if(player.vel.y != 0) {
+				player.vel = { x: -1, y: 0 };
+			}
+			break; 
+		case "Up":
+			if(player.vel.x != 0) {
+				player.vel = { x: 0, y: -1 };
+			}
+			break; 
+		case "Down":
+			if(player.vel.x != 0) {
+				player.vel = { x: 0, y: 1 };
+			}
+			break; 
+		}
+	}
+	_colors = ["red", "blue", "green", "yellow"];
+	addPlayer(client: Socket, playerName: string) {
+		const colorPicked = this._colors.splice(0,1)[0];
+		const newPlayer: Player = {
+			// id: client.id,
+			name: playerName,
+			pos: { x: 10, y: 10 },
+			vel: { x:1, y:0 },
+			snake: [{ x: 10, y: 10 }],
+			// socket: client,
+			color: colorPicked,
+		};
+		this.clients[client.id] = client;
+		this.state.players[client.id] = newPlayer;
+	}
+	removePlayer(client: Socket) {
+		delete this.state.players[client.id];
+		delete this.clients[client.id];
+	}
+	initGame (): GameState {
+		this.state.players = {};
+		this.randomFood();
+		return this.state;
+	}
+	randomFood (): void {
+		console.log("RandomFood");
+		const food = {
+			x: Math.floor(Math.random() * GRID_SIZE),
+			y: Math.floor(Math.random() * GRID_SIZE),
+		};
+		for( const [id, player] of Object.entries(this.state.players) ) {
+			for(const cell of player.snake) {
+				if(cell.x === food.x && cell.y === food.y) {
+					return this.randomFood();
+				}
 			}
 		}
-		playerOne.snake.push({...playerOne.pos});
-		playerOne.snake.shift();
+		// for(const cell of this.state.players[1].snake) {
+		// 	if(cell.x === food.x && cell.y === food.y) {
+		// 		return this.randomFood();
+		// 	}
+		// }
+		this.state.food = food;
 	}
-
-	if (playerTwo.vel.x || playerTwo.vel.y) {
-		for(const cell of playerTwo.snake) {
-			if(cell.x === playerTwo.pos.x && cell.y === playerTwo.pos.y) {
-				return 1;
+	checkHitBoundry(player: Player){
+		console.log("checkHitBoundry");
+		if(player.pos.x < 0 || player.pos.x > GRID_SIZE || player.pos.y < 0 || player.pos.y > GRID_SIZE) {
+			return true;
+		}
+	}
+	checkHitFood(player: Player) {
+		if(this.state.food.x === player.pos.x && this.state.food.y === player.pos.y) {
+			player.snake.push({ ...player.pos });
+			player.pos.x += player.vel.x;
+			player.pos.y += player.vel.y;
+			this.randomFood();
+		}
+	}
+	GameLoop () {
+		// console.log("gameloop")
+		for( const [id, player] of Object.entries(this.state.players) ) {
+			if(this.checkHitBoundry(player)){
+				const sock = this.clients[id];
+				if(sock) {
+					sock.emit("die");
+				}else {
+					console.log(`${id} keys=${Object.keys(this.clients)}`);
+				}
+				delete this.state.players[id];
+				// delete this.clients[id];
 			}
-		}
-		playerTwo.snake.push({...playerTwo.pos});
-		playerTwo.snake.shift();
-	}
+			this.checkHitFood(player);
 
-	return 0;
-}
-
-function randomFood (state: GameState): void {
-	const food = {
-		x: Math.floor(Math.random() * GRID_SIZE),
-		y: Math.floor(Math.random() * GRID_SIZE),
-	};
-
-	for(const cell of state.players[0].snake) {
-		if(cell.x === food.x && cell.y === food.y) {
-			return randomFood(state);
+			player.pos.x += player.vel.x;
+			player.pos.y += player.vel.y;
+			player.snake.push({ ...player.pos });
+			player.snake.shift();
 		}
+		//todo check hit each other
 	}
-	for(const cell of state.players[1].snake) {
-		if(cell.x === food.x && cell.y === food.y) {
-			return randomFood(state);
-		}
-	}
-	state.food = food;
 }
