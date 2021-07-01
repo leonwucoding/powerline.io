@@ -3,7 +3,7 @@ import { FRAME_RATE, GRID_SIZE } from "./constants";
 export interface Player {
 	// id: string;
 	name: string;
-	pos: Position;
+	head: Position;
 	vel: {
 		x: number;
 		y: number;
@@ -58,7 +58,7 @@ export class Game {
 		const intervalId = setInterval(() => {
 			this.GameLoop();
 			// console.log(this.io.sockets);
-			this.io.emit("gameState", this.state);
+			// this.io.emit("gameState", this.state);
 			// this.io.emit("gameState", this.state);
 		}, 1000 / FRAME_RATE);
 	}
@@ -90,13 +90,14 @@ export class Game {
 			break; 
 		}
 	}
-	_colors = ["red", "blue", "green", "yellow"];
+	_colors = ["red", "blue", "green"];
 	addPlayer(client: Socket, playerName: string) {
+		console.log(`addPlaye ${client.id} ${playerName}.`);
 		const colorPicked = this._colors.splice(0,1)[0];
 		const newPlayer: Player = {
 			// id: client.id,
 			name: playerName,
-			pos: { x: 10, y: 10 },
+			head: { x: 10, y: 10 },
 			vel: { x:1, y:0 },
 			snake: [{ x: 10, y: 10 }],
 			// socket: client,
@@ -106,6 +107,7 @@ export class Game {
 		this.state.players[client.id] = newPlayer;
 	}
 	removePlayer(client: Socket) {
+		console.log(`remove player ${client.id}`);
 		delete this.state.players[client.id];
 		delete this.clients[client.id];
 	}
@@ -135,25 +137,37 @@ export class Game {
 		this.state.food = food;
 	}
 	checkHitBoundry(player: Player){
-		console.log("checkHitBoundry");
-		if(player.pos.x < 0 || player.pos.x > GRID_SIZE || player.pos.y < 0 || player.pos.y > GRID_SIZE) {
+		// console.log("checkHitBoundry");
+		if(player.head.x < 0 || player.head.x > GRID_SIZE || player.head.y < 0 || player.head.y > GRID_SIZE) {
 			return true;
 		}
 	}
 	checkHitFood(player: Player) {
-		if(this.state.food.x === player.pos.x && this.state.food.y === player.pos.y) {
-			player.snake.push({ ...player.pos });
-			player.pos.x += player.vel.x;
-			player.pos.y += player.vel.y;
+		if(this.state.food.x === player.head.x && this.state.food.y === player.head.y) {
+			player.snake.push({ ...player.head });
+			// player.pos.x += player.vel.x;
+			// player.pos.y += player.vel.y;
 			this.randomFood();
 		}
 	}
 	GameLoop () {
 		// console.log("gameloop")
+		this.io.emit("gameState", this.state);
 		for( const [id, player] of Object.entries(this.state.players) ) {
+
+			player.head.x += player.vel.x;
+			player.head.y += player.vel.y;
+			player.snake.push({ ...player.head });
+			player.snake.shift();
+
 			if(this.checkHitBoundry(player)){
 				const sock = this.clients[id];
 				if(sock) {
+					console.log("head");
+					console.log(player.head);
+					console.log("vel");
+					console.log(player.vel);
+					// this.io.emit("gameState", this.state);
 					sock.emit("die");
 				}else {
 					console.log(`${id} keys=${Object.keys(this.clients)}`);
@@ -163,11 +177,8 @@ export class Game {
 			}
 			this.checkHitFood(player);
 
-			player.pos.x += player.vel.x;
-			player.pos.y += player.vel.y;
-			player.snake.push({ ...player.pos });
-			player.snake.shift();
-		}
+			
+		} //[{10,1},{10,2},{10,3}]
 		//todo check hit each other
 	}
 }

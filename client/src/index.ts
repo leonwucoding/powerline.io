@@ -14,34 +14,41 @@ joinGameBtn.addEventListener("click",()=>{
     // const code = gameCodeInput.value;
     playerName = playerNameInput.value;
     socket.emit("joinGame", playerName);
+    console.log(`joinGame ${socket.id} ${playerName}`);
     init();
 });
 const socket = io("http://localhost:3000");
-
+// let die: boolean = false;
 socket.on("gameState", (gameState) => {
     if(!gameActive) return;
+    console.log(gameState);
     requestAnimationFrame(() => paintGame(gameState));
 });
 socket.on("die",()=>{
+    gameActive = false;
     if(confirm("You are dead, restart?")){
         socket.emit("joinGame", playerName);
+        gameActive = true;
+    }else{
+        socket.close();
     }
 });
 
-function reset() {
-    // playerNumber = null;
-    // gameCodeInput.value = "";
-    // gameCodeDisplay.innerText = "";
-    initialScreen.style.display = "block";
-    gameScreen.style.display = "none";
-    playerNameInput.value = "";
-    gameActive = false;
-}
+// function reset() {
+//     // playerNumber = null;
+//     // gameCodeInput.value = "";
+//     // gameCodeDisplay.innerText = "";
+//     initialScreen.style.display ="block";
+//     gameScreen.style.display = "none";
+//     playerNameInput.value = "";
+//     gameActive = false;
+// }
 
 let canvas, ctx;
 let playerName;
 let gameActive = false;
 function init() {
+
     initialScreen.style.display = "none";
     gameScreen.style.display = "block";
     canvas = document.getElementById("canvas");
@@ -86,10 +93,10 @@ function paintGame(state) {
     const size = canvas.width / gridsize;
 
     ctx.fillStyle = FOOD_COLOR;
-    ctx.fillRect(food.x * size, food.y * size, size, size);
+    ctx.fillRect(food.x * size, food.y * size, gridsize, size);
 
     for( const [key, player] of Object.entries(state.players) ) {
-        paintPlayer(player, size);
+        paintPlayer(player, gridsize);
     }
 }
 
