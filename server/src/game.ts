@@ -159,6 +159,7 @@ export class Game {
 				}else {
 					console.log(`${id} keys=${Object.keys(this.clients)}`);
 				}
+				this.convertToFoods(player);
 				delete this.state.players[id];
 			}
 			this.checkHitFood(player);

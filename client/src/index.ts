@@ -96,7 +96,7 @@ function paintGame(state: GameState) {
 
     ctx.fillStyle = FOOD_COLOR;
     for(let food of state.foods){
-        ctx.fillRect(food.x * size, food.y * size, size, size);
+        ctx.arc(food.x * size, food.y * size, size / 3, 0, Math.PI * 2);
     }
     for( const [key, player] of Object.entries(state.players) ) {
         paintPlayer(player, size);
