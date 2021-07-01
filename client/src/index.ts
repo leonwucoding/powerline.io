@@ -17,7 +17,7 @@ joinGameBtn.addEventListener("click",()=>{
     console.log(`joinGame ${socket.id} ${playerName}`);
     init();
 });
-const socket = io("http://localhost:3000");
+const socket = io("http://192.168.1.161:3000");
 // let die: boolean = false;
 socket.on("gameState", (gameState) => {
     if(!gameActive) return;
@@ -25,6 +25,7 @@ socket.on("gameState", (gameState) => {
     requestAnimationFrame(() => paintGame(gameState));
 });
 socket.on("die",()=>{
+    console.log("die");
     gameActive = false;
     if(confirm("You are dead, restart?")){
         socket.emit("joinGame", playerName);
@@ -93,10 +94,10 @@ function paintGame(state) {
     const size = canvas.width / gridsize;
 
     ctx.fillStyle = FOOD_COLOR;
-    ctx.fillRect(food.x * size, food.y * size, gridsize, size);
+    ctx.fillRect(food.x * size, food.y * size, size, size);
 
     for( const [key, player] of Object.entries(state.players) ) {
-        paintPlayer(player, gridsize);
+        paintPlayer(player, size);
     }
 }
 
@@ -105,6 +106,7 @@ function paintPlayer(playerState, size) {
     const snake = playerState.snake;
 
     for (let cell of snake) {
+        console.log(cell);
         ctx.fillRect(cell.x * size, cell.y * size, size, size);
     }
 }

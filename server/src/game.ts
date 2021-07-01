@@ -1,9 +1,9 @@
 import { Server, Socket } from "socket.io";
 import { FRAME_RATE, GRID_SIZE } from "./constants";
 export interface Player {
-	// id: string;
+	id: string;
 	name: string;
-	head: Position;
+	heading: Position;
 	vel: {
 		x: number;
 		y: number;
@@ -95,9 +95,9 @@ export class Game {
 		console.log(`addPlaye ${client.id} ${playerName}.`);
 		const colorPicked = this._colors.splice(0,1)[0];
 		const newPlayer: Player = {
-			// id: client.id,
+			id: client.id,
 			name: playerName,
-			head: { x: 10, y: 10 },
+			heading: { x: 10, y: 10 },
 			vel: { x:1, y:0 },
 			snake: [{ x: 10, y: 10 }],
 			// socket: client,
@@ -136,49 +136,54 @@ export class Game {
 		// }
 		this.state.food = food;
 	}
-	checkHitBoundry(player: Player){
+	checkHitBoundry(player: Player): boolean {
 		// console.log("checkHitBoundry");
-		if(player.head.x < 0 || player.head.x > GRID_SIZE || player.head.y < 0 || player.head.y > GRID_SIZE) {
+		if(player.heading.x < 0 || player.heading.x > GRID_SIZE-1 || player.heading.y < 0 || player.heading.y > GRID_SIZE-1) {
 			return true;
 		}
+		return false;
 	}
 	checkHitFood(player: Player) {
-		if(this.state.food.x === player.head.x && this.state.food.y === player.head.y) {
-			player.snake.push({ ...player.head });
-			// player.pos.x += player.vel.x;
-			// player.pos.y += player.vel.y;
+		if(this.state.food.x === player.heading.x && this.state.food.y === player.heading.y) {
+			player.snake.push({ ...player.heading });
+			player.heading.x += player.vel.x;
+			player.heading.y += player.vel.y;
 			this.randomFood();
 		}
 	}
+	checkHitOtherPlayer(player: Player){
+		for(const[id, other] of Object.entries(this.state.players)) {
+			if(id==player.id) continue;
+			for(let cell of other.snake) {
+				if(player.heading.x==cell.x && player.heading.y==cell.y) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
 	GameLoop () {
 		// console.log("gameloop")
-		this.io.emit("gameState", this.state);
 		for( const [id, player] of Object.entries(this.state.players) ) {
 
-			player.head.x += player.vel.x;
-			player.head.y += player.vel.y;
-			player.snake.push({ ...player.head });
-			player.snake.shift();
+			player.heading.x += player.vel.x;
+			player.heading.y += player.vel.y;
 
-			if(this.checkHitBoundry(player)){
+			if(this.checkHitBoundry(player) || this.checkHitOtherPlayer(player)){
 				const sock = this.clients[id];
 				if(sock) {
-					console.log("head");
-					console.log(player.head);
-					console.log("vel");
-					console.log(player.vel);
-					// this.io.emit("gameState", this.state);
 					sock.emit("die");
 				}else {
 					console.log(`${id} keys=${Object.keys(this.clients)}`);
 				}
 				delete this.state.players[id];
-				// delete this.clients[id];
 			}
 			this.checkHitFood(player);
+			player.snake.push({ ...player.heading });
+			player.snake.shift();
+		}
 
-			
-		} //[{10,1},{10,2},{10,3}]
+		this.io.emit("gameState", this.state);
 		//todo check hit each other
 	}
 }

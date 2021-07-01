@@ -35,6 +35,9 @@
         "space-before-function-paren": ["error", "always"],
         "space-before-blocks": ["error", { "functions": "always", "keywords": "always", "classes": "always" }],
         "object-curly-spacing": ["error", "always"],
-        "space-infix-ops": ["error", "always"]
+        "space-infix-ops": ["error", { "int32Hint": false }],
+        "@typescript-eslint/explicit-function-return-type": {
+            "allowExpressions": true
+          }
     }
 }
