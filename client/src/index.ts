@@ -1,4 +1,5 @@
 import { io, Socket } from "socket.io-client";
+import { GameState, Player } from "../../server/src/models";
 const BG_COLOR = "#231f20";
 const FOOD_COLOR = "#e66916";
 
@@ -45,14 +46,14 @@ socket.on("die",()=>{
 //     gameActive = false;
 // }
 
-let canvas, ctx;
+let canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D;
 let playerName;
 let gameActive = false;
 function init() {
 
     initialScreen.style.display = "none";
     gameScreen.style.display = "block";
-    canvas = document.getElementById("canvas");
+    canvas = document.getElementById("canvas") as HTMLCanvasElement;
     ctx = canvas.getContext("2d");
 
     document.addEventListener("keydown", (e) => {
@@ -84,29 +85,32 @@ function init() {
     gameActive = true;
 }
 
-function paintGame(state) {
+function paintGame(state: GameState) {
     ctx.fillStyle = BG_COLOR;
     canvas.width = canvas.height = 600;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const food = state.food;
+    // const food = state.food;
     const gridsize = state.gridsize;
     const size = canvas.width / gridsize;
 
     ctx.fillStyle = FOOD_COLOR;
-    ctx.fillRect(food.x * size, food.y * size, size, size);
-
+    for(let food of state.foods){
+        ctx.fillRect(food.x * size, food.y * size, size, size);
+    }
     for( const [key, player] of Object.entries(state.players) ) {
         paintPlayer(player, size);
     }
 }
 
-function paintPlayer(playerState, size) {
+function paintPlayer(playerState: Player, size) {
     ctx.fillStyle = playerState.color;
     const snake = playerState.snake;
-
     for (let cell of snake) {
         console.log(cell);
         ctx.fillRect(cell.x * size, cell.y * size, size, size);
     }
+    ctx.fillStyle = "white";
+    ctx.font = "16px verdana";
+    ctx.fillText(playerState.name, playerState.heading.x * size, playerState.heading.y * size - 8);
 }
