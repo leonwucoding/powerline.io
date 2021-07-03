@@ -1,6 +1,6 @@
 import { Server, Socket } from "socket.io";
 import { FRAME_RATE, GRID_SIZE } from "./constants";
-import { GameState, Player } from "./models";
+import { Food, GameState, Player, UserInput } from "./models";
 export class Game {
 	state: GameState;
 	io: Server;
@@ -8,7 +8,7 @@ export class Game {
 	constructor(io: Server) {
 		this.state = {
 			players: {},
-			foods: [{x: 7,y: 7},{x: 10,y: 10}],
+			foods: [{pos: {x: 1, y: 1}, bornTime: Date.now()}],
 			gridsize: GRID_SIZE
 		};
 		this.io = io;
@@ -22,10 +22,12 @@ export class Game {
 		});
 		client.on("disconnection",()=>{
 			console.log(`${client.id} disconnect`);
-			this.removePlayer(client);
+			delete this.clients[client.id];
+			// const player = this.state.players[client.id];
+			// this.removePlayer(player);
 		});
-		client.on("turn", (direction: "Right" | "Left" | "Down" | "Up") => {
-			this.handlePlayerInput(client, direction);
+		client.on("turn", (data: UserInput) => {
+			this.handlePlayerInput(client, data);
 		});
 	}
 	
@@ -38,12 +40,12 @@ export class Game {
 			// this.io.emit("gameState", this.state);
 		}, 1000 / FRAME_RATE);
 	}
-	handlePlayerInput = (client: Socket, direction: "Right" | "Left" | "Down" | "Up") => {
-		console.log(`${client.id} turn ${direction}`);
+	handlePlayerInput = (client: Socket, data: UserInput) => {
+		// console.log(`${client.id} turn ${direction}`);
 		// const clientNumber = (client as any).number;
-		const player = this.state.players[client.id];
+		const player = this.state.players[data.playerName];
 		if(!player) return; //player dead
-		switch(direction) {
+		switch(data.direction) {
 		case "Right":
 			if(player.vel.y != 0) {
 				player.vel = { x: 1, y: 0 };
@@ -68,46 +70,46 @@ export class Game {
 	}
 	_colors = ["#ffe6f7", "#bf73ff", "#36badf","#08c96b","#f0dbb7","#beff11"];
 	addPlayer(client: Socket, playerName: string) {
-		console.log(`addPlaye ${client.id} ${playerName}.`);
-		const colorPicked = this._colors.splice(0,1)[0];
-		const newPlayer: Player = {
-			id: client.id,
-			name: playerName,
-			heading: { x: 10, y: 10 },
-			vel: { x:1, y:0 },
-			snake: [{ x: 10, y: 10 }],
-			// socket: client,
-			color: colorPicked,
-		};
+		console.log(`addPlayer ${client.id} ${playerName}.`);
+		if(!this.state.players[playerName]){
+			const colorPicked = this._colors.splice(0,1)[0];
+			const newPlayer: Player = {
+				id: client.id,
+				name: playerName,
+				heading: { x: 10, y: 10 },
+				vel: { x:1, y:0 },
+				snake: [{ x: 10, y: 10 }],
+				color: colorPicked,
+			};
+			this.state.players[playerName] = newPlayer;
+		}
 		this.clients[client.id] = client;
-		this.state.players[client.id] = newPlayer;
 	}
-	removePlayer(client: Socket) {
-		console.log(`remove player ${client.id}`);
-		const player = this.state.players[client.id];
+	removePlayer(player: Player) {
+		console.log(`remove player ${player.name}`);
+		// const player = this.state.players[player.id];
 		this._colors.push(player.color);
-		delete this.state.players[client.id];
-		delete this.clients[client.id];
+		delete this.state.players[player.name];
+		// delete this.clients[player.id];
 	}
-	initGame (): GameState {
-		this.state.players = {};
-		this.randomFood();
-		return this.state;
-	}
-	randomFood (): void {
-		console.log("RandomFood");
-		const food = {
+	generateFood (): void {
+		const newFood: Food = {pos: {
 			x: Math.floor(Math.random() * GRID_SIZE),
 			y: Math.floor(Math.random() * GRID_SIZE),
-		};
+		}, bornTime: Date.now()};
 		for( const [id, player] of Object.entries(this.state.players) ) {
 			for(const cell of player.snake) {
-				if(cell.x === food.x && cell.y === food.y) {
-					return this.randomFood();
+				if(cell.x === newFood.pos.x && cell.y === newFood.pos.y) {
+					return this.generateFood();
 				}
 			}
 		}
-		this.state.foods.push(food);
+		for(const food of this.state.foods) {
+			if(food.pos.x === newFood.pos.x && food.pos.y === newFood.pos.y) {
+				return this.generateFood();
+			}
+		}
+		this.state.foods.push(newFood);
 	}
 	checkHitBoundry(player: Player): boolean {
 		// console.log("checkHitBoundry");
@@ -117,19 +119,20 @@ export class Game {
 		return false;
 	}
 	checkHitFood(player: Player) {
-		for(let i=0;i<this.state.foods.length-1; i++){
+		for(let i=0;i<this.state.foods.length; i++){
 			const food = this.state.foods[i];
-			if(food.x === player.heading.x && food.y === player.heading.y) {
+			// if(food.pos.x === player.heading.x && food.pos.y === player.heading.y) {
+			if(Math.abs(food.pos.x - player.heading.x)<=1 && Math.abs(food.pos.y - player.heading.y)<=1) {
+				console.log("hit food");
 				player.snake.push({ ...player.heading });
 				player.heading.x += player.vel.x;
 				player.heading.y += player.vel.y;
 				this.state.foods.splice(i,1);
-				this.randomFood();
 			}
 		}
 	}
 	checkHitOtherPlayer(player: Player){
-		for(const[id, other] of Object.entries(this.state.players)) {
+		for(const[name, other] of Object.entries(this.state.players)) {
 			// if(id==player.id) continue;
 			for(let cell of other.snake) {
 				if(player.heading.x==cell.x && player.heading.y==cell.y) {
@@ -140,33 +143,48 @@ export class Game {
 		return false;
 	}
 	convertToFoods(player: Player){
-		for(let i=0; i<player.snake.length-1;i++){
+
+		for(let i=0; i<player.snake.length;i++){
 			const cell = player.snake[i];
-			this.state.foods.push({x: cell.x+2*i, y: cell.y});
+			let hasFoodHere = false;
+			for(let f of this.state.foods){
+				if(f.pos.x==cell.x && f.pos.y==cell.y) hasFoodHere = true;
+			}
+			if(!hasFoodHere){
+				this.state.foods.push({pos: {x: cell.x, y: cell.y}, bornTime: Date.now()});
+			}
 		}
 	}
 	GameLoop () {
 		// console.log("gameloop")
-		for( const [id, player] of Object.entries(this.state.players) ) {
+		for( const [name, player] of Object.entries(this.state.players) ) {
 
 			player.heading.x += player.vel.x;
 			player.heading.y += player.vel.y;
 
 			if(this.checkHitBoundry(player) || this.checkHitOtherPlayer(player)){
-				const sock = this.clients[id];
+				const sock = this.clients[player.id];
 				if(sock) {
 					sock.emit("die");
-				}else {
-					console.log(`${id} keys=${Object.keys(this.clients)}`);
 				}
 				this.convertToFoods(player);
-				delete this.state.players[id];
+				this.removePlayer(player);
 			}
 			this.checkHitFood(player);
 			player.snake.push({ ...player.heading });
 			player.snake.shift();
 		}
-
+		//remove food born more than 30 sec
+		const now = Date.now();
+		for(let i=0;i<this.state.foods.length; i++){
+			const food = this.state.foods[i];
+			if(now - food.bornTime>30 * 1000){
+				this.state.foods.splice(i,1);
+			}
+		}
+		if(this.state.foods.length<10){
+			this.generateFood();
+		}
 		this.io.emit("gameState", this.state);
 		//todo check hit each other
 	}

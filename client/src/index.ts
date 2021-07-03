@@ -22,7 +22,7 @@ const socket = io("http://192.168.1.161:3000");
 // let die: boolean = false;
 socket.on("gameState", (gameState) => {
     if(!gameActive) return;
-    console.log(gameState);
+    // console.log(gameState);
     requestAnimationFrame(() => paintGame(gameState));
 });
 socket.on("die",()=>{
@@ -31,8 +31,6 @@ socket.on("die",()=>{
     if(confirm("You are dead, restart?")){
         socket.emit("joinGame", playerName);
         gameActive = true;
-    }else{
-        socket.close();
     }
 });
 
@@ -80,7 +78,7 @@ function init() {
             default:
                 return;
         }
-        socket.emit("turn", direction);
+        socket.emit("turn", {playerName,direction});
     })
     gameActive = true;
 }
@@ -93,11 +91,17 @@ function paintGame(state: GameState) {
     // const food = state.food;
     const gridsize = state.gridsize;
     const size = canvas.width / gridsize;
-
+    // console.log("foods");
+    // console.log(state.foods);
     ctx.fillStyle = FOOD_COLOR;
+    
     for(let food of state.foods){
-        ctx.arc(food.x * size, food.y * size, size / 3, 0, Math.PI * 2);
+        ctx.beginPath();
+        ctx.arc(food.pos.x * size + size / 2, food.pos.y * size + size / 2, size / 2, 0, Math.PI * 2);
+        ctx.fill();
     }
+    ctx.closePath();
+    
     for( const [key, player] of Object.entries(state.players) ) {
         paintPlayer(player, size);
     }
@@ -105,9 +109,10 @@ function paintGame(state: GameState) {
 
 function paintPlayer(playerState: Player, size) {
     ctx.fillStyle = playerState.color;
+    // console.log(`playerState.color=${playerState.color}`);
     const snake = playerState.snake;
     for (let cell of snake) {
-        console.log(cell);
+        // console.log(cell);
         ctx.fillRect(cell.x * size, cell.y * size, size, size);
     }
     ctx.fillStyle = "white";
